@@ -1,22 +1,31 @@
-import { useState, useEffect, useRef } from 'react';
-import * as React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Car from './Car';
 import ListItem from './ListItem';
 import { api } from './api';
 import { wait } from '../../shared/utils';
 import config from '../../shared/config';
-import { getObstaclesMap } from '../../shared/methods';
+import { getObstaclesMap, getDefaultObstaclesMap } from '../../shared/methods';
 import { MapCustomerIcon, MapDestIcon } from './Icons';
+import { calculateTravelTime } from './movement';
 
-const { gridSize, squareSize, fetchInterval } = config;
-const obstaclesMap = getObstaclesMap();
+const { gridSize, squareSize, fetchInterval, increment, refreshInterval } = config;
+
+// Utility function to calculate median
+const calculateMedian = (numbers) => {
+  if (!numbers.length) return 0;
+  const sorted = [...numbers].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
+};
 
 const loadDrivers = async (previousUpdateAtRef, setCars, setRefreshing) => {
   while (true) {
     const drivers = await api.get('/drivers');
-    // console.log('drivers', drivers);
     const timeout = 2000;
     const now = Date.now();
+
     if (now - previousUpdateAtRef.current > timeout) {
       previousUpdateAtRef.current = now;
       setCars([]);
@@ -30,15 +39,23 @@ const loadDrivers = async (previousUpdateAtRef, setCars, setRefreshing) => {
     for (const driver of drivers) {
       const { location } = driver;
       let path = [];
-      if (driver.path) path = JSON.parse(driver.path) as [number, number][];
-      const [x, y] = location.split(':');
-      cars.push({
-        ...driver,
-        actual: [parseInt(x), parseInt(y)],
-        path,
-      });
+      try {
+        if (driver.path) path = JSON.parse(driver.path);
+      } catch (error) {
+        console.error('Invalid driver path:', driver.path);
+      }
+      if (typeof location === 'string' && location.includes(':')) {
+        const [x, y] = location.split(':');
+        cars.push({
+          ...driver,
+          actual: [parseInt(x), parseInt(y)],
+          path,
+        });
+      } else {
+        console.error('Invalid driver location:', location);
+      }
     }
-    // console.log('cars', cars);
+
     setCars(cars);
     setRefreshing(false);
     await wait(fetchInterval);
@@ -48,15 +65,13 @@ const loadDrivers = async (previousUpdateAtRef, setCars, setRefreshing) => {
 const loadCustomers = async (setCustomers) => {
   while (true) {
     let customers = await api.get('/customers');
-    customers = customers.filter((c) => {
-      if (!c.location) console.log('no location', c);
-      return c.location;
-    });
-    customers = customers.map((c) => {
-      const { location } = c;
-      const [x, y] = location.split(':');
-      return { ...c, location: [parseInt(x), parseInt(y)] };
-    });
+    customers = customers
+      .filter((c) => typeof c.location === 'string' && c.location.includes(':'))
+      .map((c) => {
+        const { location } = c;
+        const [x, y] = location.split(':');
+        return { ...c, location: [parseInt(x), parseInt(y)] };
+      });
     setCustomers(customers);
     await wait(fetchInterval);
   }
@@ -68,13 +83,52 @@ const GeoMap = () => {
   const [cars, setCars] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [obstaclesMap, setObstaclesMap] = useState(getDefaultObstaclesMap());
+  const [medianTravelTime, setMedianTravelTime] = useState(0);
+  const [regularTravelTime, setRegularTravelTime] = useState('');
+  const [timeLostPerPerson, setTimeLostPerPerson] = useState(0);
+  const [economicLossPerPerson, setEconomicLossPerPerson] = useState(0);
+  const [totalEconomicLoss, setTotalEconomicLoss] = useState(0);
+
+  const switchObstacles = () => setObstaclesMap(getObstaclesMap('objects2'));
+  const floodObstacles = () => setObstaclesMap(getObstaclesMap());
+  const resetToDefaultMap = () => setObstaclesMap(getDefaultObstaclesMap());
 
   useEffect(() => {
     previousUpdateAtRef.current = Date.now();
 
-    loadDrivers(previousUpdateAtRef, setCars, setRefreshing);
-    loadCustomers(setCustomers);
+    const driverInterval = setInterval(() => {
+      loadDrivers(previousUpdateAtRef, setCars, setRefreshing);
+    }, fetchInterval);
+
+    const customerInterval = setInterval(() => {
+      loadCustomers(setCustomers);
+    }, fetchInterval);
+
+    return () => {
+      clearInterval(driverInterval);
+      clearInterval(customerInterval);
+    };
   }, []);
+
+  useEffect(() => {
+    const travelTimes = cars.map(({ path }) =>
+      Array.isArray(path) ? calculateTravelTime(path, increment) : 0
+    );
+    setMedianTravelTime(calculateMedian(travelTimes));
+  }, [cars]);
+
+  useEffect(() => {
+    if (regularTravelTime && medianTravelTime) {
+      const timeDifference = medianTravelTime - Number(regularTravelTime) * 60000; // Convert input to ms
+      const timeLost = timeDifference / 60000; // Convert to minutes
+      const economicLoss = timeLost * 0.52; // Can change this value acordingly
+
+      setTimeLostPerPerson(timeLost);
+      setEconomicLossPerPerson(economicLoss);
+      setTotalEconomicLoss(economicLoss * customers.length); // Multiply by customer count
+    }
+  }, [regularTravelTime, medianTravelTime, customers]);
 
   const obstacleElems = [];
   for (let [key, color] of obstaclesMap) {
@@ -93,16 +147,12 @@ const GeoMap = () => {
   }
 
   const pathElems = cars.map(({ driverId, path, status }) => {
+    if (!Array.isArray(path)) return null;
     let points = '';
-
     path.forEach(([x, y]) => {
-      points += `${x * squareSize + squareSize / 4},${
-        y * squareSize + squareSize / 4
-      } `;
+      points += `${x * squareSize + squareSize / 4},${y * squareSize + squareSize / 4} `;
     });
-
     const first = path[0];
-
     return (
       <>
         {first && (
@@ -130,23 +180,22 @@ const GeoMap = () => {
     );
   });
 
-  const carElems = cars.map(({ driverId, actual, path }) => {
-    return (
-      <Car
-        key={`car-${driverId}`}
-        driverId={driverId}
-        actual={actual}
-        path={path}
-      />
-    );
-  });
+  const carElems = cars.map(({ driverId, actual, path }) => (
+    <Car
+      key={`car-${driverId}`}
+      driverId={driverId}
+      actual={actual}
+      path={path}
+      increment={increment}
+      refreshInterval={refreshInterval}
+    />
+  ));
 
   const seenCustomers = new Set();
   const customerElems = cars
     .filter(({ status }) => status === 'pickup')
     .map(({ path }) => {
       if (!path || path.length === 0) return null;
-
       const [x, y] = path[path.length - 1];
       seenCustomers.add(`${x}:${y}`);
       return (
@@ -173,7 +222,8 @@ const GeoMap = () => {
   const destElems = cars
     .filter(({ status }) => status === 'enroute')
     .map(({ driverId, path }) => {
-      const [x, y] = path[path.length - 1];
+      const lastPoint = path[path.length - 1];
+      const [x, y] = Array.isArray(lastPoint) ? lastPoint : [0, 0];
       return (
         <MapDestIcon
           key={`d-${driverId}-${x}:${y}`}
@@ -195,23 +245,23 @@ const GeoMap = () => {
         status,
         path,
         pathIndex,
-      }) => {
-        return (
-          <ListItem
-            key={`${driverId}:${customerId}`}
-            driverId={driverId}
-            customerId={customerId}
-            driverName={name}
-            customerName={customerName}
-            progress={(pathIndex / (path.length - 1)) * 100}
-            status={status}
-          />
-        );
-      }
+      }) => (
+        <ListItem
+          key={`${driverId}:${customerId}`}
+          driverId={driverId}
+          customerId={customerId}
+          driverName={name}
+          customerName={customerName}
+          progress={(pathIndex / (path.length - 1)) * 100}
+          status={status}
+        />
+      )
     );
 
   return (
     <div className="view-map">
+      <button onClick={resetToDefaultMap}>Reset to Default</button>
+      <button onClick={floodObstacles}>Flood</button>
       <div data-tour="map" className="map">
         <div className="map-inner">
           <div className={`map-refresh ${refreshing ? 'active' : ''}`} />
@@ -226,6 +276,56 @@ const GeoMap = () => {
             {customerElems}
             {destElems}
           </svg>
+          <div
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              padding: '8px 12px',
+              backgroundColor: '#ffffff',
+              borderRadius: '5px',
+              boxShadow: '0px 0px 10px rgba(0, 0, 0, 0.1)',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              color: '#333333',
+            }}
+          >
+            Median Travel Time: {(medianTravelTime / 60000).toFixed(2)} minutes
+          </div>
+        </div>
+        <div
+          style={{
+            margin: '20px 10px',
+            padding: '10px',
+            backgroundColor: '#f9f9f9',
+            border: '1px solid #ddd',
+            borderRadius: '5px',
+            boxShadow: '0 2px 5px rgba(0, 0, 0, 0.1)',
+          }}
+        >
+          <label>
+            Regular Travel Time (minutes):{' '}
+            <input
+              type="number"
+              value={regularTravelTime}
+              onChange={(e) => setRegularTravelTime(e.target.value)}
+              style={{
+                padding: '5px',
+                margin: '5px',
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+              }}
+            />
+          </label>
+          <div>
+            <strong>Time Lost per Person:</strong> {timeLostPerPerson.toFixed(2)} minutes
+          </div>
+          <div>
+            <strong>Economic Loss per Person:</strong> ${economicLossPerPerson.toFixed(2)}
+          </div>
+          <div>
+            <strong>Total Economic Loss:</strong> ${totalEconomicLoss.toFixed(2)}
+          </div>
         </div>
       </div>
       <div data-tour="list" className="list">
@@ -234,4 +334,5 @@ const GeoMap = () => {
     </div>
   );
 };
+
 export default GeoMap;

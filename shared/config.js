@@ -5,8 +5,8 @@ const fetchInterval = 1500;
 const refreshInterval = 16;
 const turnDuration = refreshInterval * 8;
 const animationOverhead = 200;
-const maxActiveCustomers = 15;
-const maxActiveDrivers = 12;
+const maxActiveCustomers = 30;
+const maxActiveDrivers = 25;
 
 const config = {
   maxActiveCustomers,
