@@ -83,16 +83,13 @@ const GeoMap = () => {
   const [cars, setCars] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [obstaclesMap, setObstaclesMap] = useState(getDefaultObstaclesMap());
+  const [obstaclesMap, setObstaclesMap] = useState(getObstaclesMap());
   const [medianTravelTime, setMedianTravelTime] = useState(0);
   const [regularTravelTime, setRegularTravelTime] = useState('');
   const [timeLostPerPerson, setTimeLostPerPerson] = useState(0);
+  const [economicLossMultiplier, setEconomicLossMultiplier] = useState(0.52);
   const [economicLossPerPerson, setEconomicLossPerPerson] = useState(0);
   const [totalEconomicLoss, setTotalEconomicLoss] = useState(0);
-
-  const switchObstacles = () => setObstaclesMap(getObstaclesMap('objects2'));
-  const floodObstacles = () => setObstaclesMap(getObstaclesMap());
-  const resetToDefaultMap = () => setObstaclesMap(getDefaultObstaclesMap());
 
   useEffect(() => {
     previousUpdateAtRef.current = Date.now();
@@ -122,16 +119,16 @@ const GeoMap = () => {
     if (regularTravelTime && medianTravelTime) {
       const timeDifference = medianTravelTime - Number(regularTravelTime) * 60000; // Convert input to ms
       const timeLost = timeDifference / 60000; // Convert to minutes
-      const economicLoss = timeLost * 0.52; // Can change this value acordingly
+      const economicLoss = timeLost * economicLossMultiplier; // Dynamic multiplier
 
       setTimeLostPerPerson(timeLost);
       setEconomicLossPerPerson(economicLoss);
       setTotalEconomicLoss(economicLoss * customers.length); // Multiply by customer count
     }
-  }, [regularTravelTime, medianTravelTime, customers]);
+  }, [regularTravelTime, medianTravelTime, customers, economicLossMultiplier]);
 
   const obstacleElems = [];
-  for (let [key, color] of obstaclesMap) {
+  for (let [key, color] of obstaclesMap.entries()) {
     const [x, y] = key.split(':');
     obstacleElems.push(
       <rect
@@ -154,7 +151,7 @@ const GeoMap = () => {
     });
     const first = path[0];
     return (
-      <>
+      <React.Fragment key={`path-wrapper-${driverId}`}>
         {first && (
           <rect
             key={`start-${driverId}`}
@@ -163,7 +160,7 @@ const GeoMap = () => {
             x={first[0] * squareSize - squareSize / 7}
             y={first[1] * squareSize - squareSize / 7}
             style={{
-              fill: `${status === 'enroute' ? '#454545' : '#adaaaa'}`,
+              fill: status === 'enroute' ? '#454545' : '#adaaaa',
             }}
           />
         )}
@@ -172,11 +169,11 @@ const GeoMap = () => {
           points={points}
           style={{
             fill: 'none',
-            stroke: `${status === 'enroute' ? '#454545' : '#adaaaa'}`,
+            stroke: status === 'enroute' ? '#454545' : '#adaaaa',
             strokeWidth: 4,
           }}
         />
-      </>
+      </React.Fragment>
     );
   });
 
@@ -260,8 +257,6 @@ const GeoMap = () => {
 
   return (
     <div className="view-map">
-      <button onClick={resetToDefaultMap}>Reset to Default</button>
-      <button onClick={floodObstacles}>Flood</button>
       <div data-tour="map" className="map">
         <div className="map-inner">
           <div className={`map-refresh ${refreshing ? 'active' : ''}`} />
@@ -316,6 +311,19 @@ const GeoMap = () => {
                 border: '1px solid #ccc',
               }}
             />
+          </label>
+          <label>
+            Economic Loss per Person:{' '}
+            <input
+              type="range"
+              min="0"
+              max="10"
+              step="0.1"
+              value={economicLossMultiplier}
+              onChange={(e) => setEconomicLossMultiplier(Number(e.target.value))}
+              style={{ margin: '0 10px' }}
+            />
+            {economicLossMultiplier.toFixed(2)}
           </label>
           <div>
             <strong>Time Lost per Person:</strong> {timeLostPerPerson.toFixed(2)} minutes
