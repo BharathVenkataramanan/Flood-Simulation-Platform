@@ -10,7 +10,7 @@ import { calculateTravelTime } from './movement';
 
 const { gridSize, squareSize, fetchInterval, increment, refreshInterval } = config;
 
-// Utility function to calculate median
+
 const calculateMedian = (numbers) => {
   if (!numbers.length) return 0;
   const sorted = [...numbers].sort((a, b) => a - b);
@@ -117,13 +117,13 @@ const GeoMap = () => {
 
   useEffect(() => {
     if (regularTravelTime && medianTravelTime) {
-      const timeDifference = medianTravelTime - Number(regularTravelTime) * 60000; // Convert input to ms
-      const timeLost = timeDifference / 60000; // Convert to minutes
-      const economicLoss = timeLost * economicLossMultiplier; // Dynamic multiplier
+      const timeDifference = medianTravelTime - Number(regularTravelTime) * 60000; 
+      const timeLost = timeDifference / 60000; 
+      const economicLoss = timeLost * economicLossMultiplier; 
 
       setTimeLostPerPerson(timeLost);
       setEconomicLossPerPerson(economicLoss);
-      setTotalEconomicLoss(economicLoss * customers.length); // Multiply by customer count
+      setTotalEconomicLoss(economicLoss * customers.length); 
     }
   }, [regularTravelTime, medianTravelTime, customers, economicLossMultiplier]);
 
