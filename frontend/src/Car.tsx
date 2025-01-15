@@ -21,16 +21,16 @@ const {
 
 interface Props {
   driverId: string;
-  path: [number, number][]; // Path of the car
-  actual: [number, number]; // Current position of the car
-  increment: number; // Increment property to control movement speed
-  refreshInterval: number; // Refresh interval to control animation speed
+  path: [number, number][]; 
+  actual: [number, number]; 
+  increment: number; 
+  refreshInterval: number; 
 }
 
 interface State {
   position: [number, number];
   rotation: number;
-  travelTime: number; // Fixed travel time for the journey
+  travelTime: number; 
 }
 
 export default class Car extends React.Component<Props, State> {
@@ -42,7 +42,7 @@ export default class Car extends React.Component<Props, State> {
     super(props);
     const { path, actual } = props;
 
-    // Debugging logs to check path and actual values
+    
     console.log('Path:', path);
     console.log('Actual position:', actual);
 
@@ -52,20 +52,20 @@ export default class Car extends React.Component<Props, State> {
         return x === actual[0] && y === actual[1];
       });
 
-      // Additional debugging to track pathIndex
+      
       console.log('Path Index:', pathIndex);
       
       if (pathIndex === 0) pathIndex = 1;
       rotation = getRotation(path, pathIndex);
     }
 
-    // Pre-calculate travel time based on the initial and final positions
+    
     const travelTime = calculateTravelTime(path, props.increment);
 
     this.state = {
       position: actual || [0, 0],
       rotation,
-      travelTime, // Fixed travel time
+      travelTime, 
     };
   }
 
@@ -85,7 +85,7 @@ export default class Car extends React.Component<Props, State> {
     const isClockwise = distClockwise < distCounterclockwise;
 
     const diff = Math.min(distClockwise, distCounterclockwise);
-    const steps = turnDuration / this.props.refreshInterval; // Use refreshInterval from props
+    const steps = turnDuration / this.props.refreshInterval; 
     const increment = diff / steps;
 
     while (this.state.rotation !== targetRotation) {
@@ -96,7 +96,7 @@ export default class Car extends React.Component<Props, State> {
       else if (rotation < 0) rotation = 360 - Math.abs(rotation);
 
       this.setState({ rotation });
-      await wait(this.props.refreshInterval); // Use refreshInterval from props
+      await wait(this.props.refreshInterval); 
     }
 
     this.rotateBusy = false;
@@ -107,7 +107,7 @@ export default class Car extends React.Component<Props, State> {
     path: [number, number][],
     receivedAt: number
   ) {
-    // Check if path or actual position is missing
+    
     if (!path || path.length === 0 || !actual) {
       console.error('Invalid path or actual position:', path, actual);
       return;
@@ -130,7 +130,7 @@ export default class Car extends React.Component<Props, State> {
 
     const section = path.slice(startIndex, endIndex + 1);
     
-    // Debugging log to track if section is valid
+    
     console.log('Movement Section:', section);
 
     if (section.length < 2) return (this.moveBusy = false);
@@ -146,7 +146,7 @@ export default class Car extends React.Component<Props, State> {
     for (let i = 0; i < section.length; i++) {
       if (i > 0) {
         while (this.rotateBusy) {
-          await wait(this.props.refreshInterval); // Use refreshInterval from props
+          await wait(this.props.refreshInterval); 
         }
         await this.rotate(section, i);
       }
@@ -155,13 +155,13 @@ export default class Car extends React.Component<Props, State> {
       while (currX !== nextX) {
         currX = advanceCoord(currX, nextX, increment);
         this.setState({ position: [currX, this.state.position[1]] });
-        await wait(this.props.refreshInterval); // Use refreshInterval from props
+        await wait(this.props.refreshInterval); 
       }
 
       while (currY !== nextY) {
         currY = advanceCoord(currY, nextY, increment);
         this.setState({ position: [this.state.position[0], currY] });
-        await wait(this.props.refreshInterval); // Use refreshInterval from props
+        await wait(this.props.refreshInterval); 
       }
     }
 
@@ -178,7 +178,7 @@ export default class Car extends React.Component<Props, State> {
     const receivedAt = Date.now();
     this.latestUpdateAt = receivedAt;
 
-    // Recalculate travel time when the car's position or path changes
+    
     const travelTime = calculateTravelTime(this.props.path, this.props.increment);
     this.setState({ travelTime });
 
