@@ -6,7 +6,7 @@ export const getNextCoordIndex = (
   currY: number,
   path: number[][]
 ): number => {
-  // Ensure path is not empty or undefined before processing
+  
   if (!path || path.length === 0) {
     console.error('Invalid path in getNextCoordIndex:', path);
     return -1;
@@ -72,7 +72,7 @@ export const countTurns = (section: number[][]): number => {
 export const getRotation = (path: number[][], i: number): number => {
   if (!path || path.length < 2 || i <= 0 || i >= path.length) {
     console.error('Invalid path or index in getRotation:', { path, i });
-    return 0; // Default rotation value
+    return 0; 
   }
 
   const [x0, y0] = path[i - 1];
@@ -107,7 +107,7 @@ export const calculateTravelTime = (section: number[][], increment: number): num
     }
   }
 
-  return totalPixelsTraveled * 3401.94; // Time in ms (50ms per pixel)
+  return totalPixelsTraveled * 3401.94; 
 };
 
 export const getTurnDistance = (
@@ -160,7 +160,7 @@ export const move = async (
         console.log(`Moving to Y: ${currY}`);
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 50)); // 50ms delay
+      await new Promise((resolve) => setTimeout(resolve, 50)); 
     }
   }
 };
